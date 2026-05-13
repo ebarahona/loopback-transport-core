@@ -152,10 +152,6 @@ Constructed via immutable factory methods (`forHttp`, `forRpc`, `forEvent`). `sw
 import {ServerBase} from '@ebarahona/loopback-transport-core';
 
 class KafkaServer extends ServerBase {
-  constructor() {
-    super({handlerTimeoutMs: 10_000}); // default 30s
-  }
-
   async listen(): Promise<void> {
     await this.consumer.connect();
     await this.consumer.subscribe({topics: this.getTopics()});
