@@ -1,8 +1,14 @@
 // Component
 export {TransportComponent} from './transport.component';
 
+// Booter
+export {TransportBooter} from './transport-booter';
+
 // Binding keys
 export {TransportBindings} from './keys';
+
+// Registry
+export {HandlerRegistry} from './registry';
 
 // Interfaces
 export {

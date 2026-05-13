@@ -1,49 +1,31 @@
-import {
-  Application,
-  Binding,
-  Component,
-  CoreBindings,
-  inject,
-  MetadataInspector,
-} from '@loopback/core';
-import {
-  MESSAGE_HANDLER_METADATA,
-  EVENT_HANDLER_METADATA,
-  MessageHandlerMetadata,
-  EventHandlerMetadata,
-} from './decorators';
+import {Binding, BindingScope, Component} from '@loopback/core';
+import {HandlerRegistry} from './registry';
+import {TransportBooter} from './transport-booter';
 import {TransportBindings} from './keys';
-import {TransportServer, MessageHandler} from './interfaces';
-import debugFactory from 'debug';
-
-const debug = debugFactory('loopback:transport');
 
 /**
  * LoopBack 4 component that enables transport-agnostic microservices.
  *
- * Scans controllers for @messageHandler and @eventHandler decorators
- * and registers them with the appropriate transport server.
+ * Registers:
+ * - HandlerRegistry (singleton): discovers and manages transport handlers
+ * - TransportBooter (lifecycle observer): wires handlers to servers at boot
+ *
+ * The booter runs after all controllers are registered, scans for
+ * @messageHandler/@eventHandler metadata, binds handlers to transport
+ * servers, and starts/stops listeners with the application lifecycle.
  *
  * Usage:
  * ```typescript
  * const app = new Application();
  * app.component(TransportComponent);
  * ```
- *
- * Or with REST:
- * ```typescript
- * const app = new RestApplication();
- * app.component(TransportComponent);
- * // HTTP + transport listeners on the same app
- * ```
  */
 export class TransportComponent implements Component {
-  bindings: Binding[] = [];
+  bindings: Binding[] = [
+    Binding.bind(TransportBindings.HANDLER_REGISTRY)
+      .toClass(HandlerRegistry)
+      .inScope(BindingScope.SINGLETON),
+  ];
 
-  constructor(
-    @inject(CoreBindings.APPLICATION_INSTANCE, {optional: true})
-    private app?: Application,
-  ) {
-    debug('TransportComponent initialized');
-  }
+  lifeCycleObservers = [TransportBooter];
 }

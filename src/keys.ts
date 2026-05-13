@@ -1,10 +1,18 @@
 import {BindingKey} from '@loopback/core';
 import {TransportClient} from './interfaces';
+import type {HandlerRegistry} from './registry';
 
 export namespace TransportBindings {
   /**
+   * Binding key for the handler registry.
+   */
+  export const HANDLER_REGISTRY = BindingKey.create<HandlerRegistry>(
+    'transport.handler-registry',
+  );
+
+  /**
    * Binding key for the current message payload.
-   * Set by the transport server before invoking the handler.
+   * Set by the handler registry before invoking the handler.
    */
   export const CURRENT_PAYLOAD = BindingKey.create<unknown>(
     'transport.current.payload',
