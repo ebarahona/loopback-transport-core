@@ -42,7 +42,15 @@ export interface TransportServer {
   addHandler(pattern: string, handler: MessageHandler): void;
 
   /**
-   * Get all registered handlers.
+   * Get all registered handlers. Returns a read-only view.
+   * Each pattern maps to an array of handlers (one for request/response,
+   * potentially many for event fan-out).
    */
-  getHandlers(): Map<string, MessageHandler>;
+  getHandlers(): ReadonlyMap<string, readonly MessageHandler[]>;
+
+  /**
+   * Remove all registered handlers.
+   * Called before rebinding on restart to prevent duplicate registration.
+   */
+  clearHandlers(): void;
 }

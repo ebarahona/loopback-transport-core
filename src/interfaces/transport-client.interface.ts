@@ -21,25 +21,25 @@ export interface TransportClient {
    * Send a request and wait for a response (request/response pattern).
    * Returns a cold Observable: the message is sent when subscribed.
    *
-   * @param pattern - The message pattern to match on the server side
+   * @param pattern - String or object pattern to match on the server side
    * @param data - The message payload
    */
   send<TResult = unknown, TInput = unknown>(
-    pattern: string,
+    pattern: string | Record<string, unknown>,
     data: TInput,
   ): Observable<TResult>;
 
   /**
    * Emit an event with no response expected (fire-and-forget pattern).
-   * Returns a hot Observable: the message is sent immediately.
+   * Returns a Promise that resolves when the event is dispatched.
    *
-   * @param pattern - The event pattern
+   * @param pattern - String or object event pattern
    * @param data - The event payload
    */
   emit<TInput = unknown>(
-    pattern: string,
+    pattern: string | Record<string, unknown>,
     data: TInput,
-  ): Observable<void>;
+  ): Promise<void>;
 
   /**
    * Observable stream of connection status changes.

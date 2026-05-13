@@ -1,5 +1,10 @@
 import {MethodDecoratorFactory} from '@loopback/metadata';
-import {EVENT_HANDLER_METADATA, EventHandlerMetadata} from './constants';
+import {
+  EVENT_HANDLER_METADATA,
+  EventHandlerMetadata,
+  HandlerOptions,
+} from './constants';
+import {normalizePattern} from '../utils';
 
 /**
  * Mark a controller method as a fire-and-forget event handler.
@@ -10,27 +15,33 @@ import {EVENT_HANDLER_METADATA, EventHandlerMetadata} from './constants';
  * Multiple event handlers can be registered for the same pattern.
  * They are chained and all execute.
  *
- * @param pattern - The event pattern to match (e.g., 'order.placed')
+ * @param pattern - String or object pattern to match (e.g., 'order.placed' or {event: 'order.placed'})
  * @param options - Optional transport name and extras
  *
  * @example
  * ```typescript
- * class OrderController {
- *   @eventHandler('order.placed')
- *   async handleOrderPlaced(@payload() data: OrderDto): Promise<void> {
- *     await this.notificationService.send(data);
- *   }
- * }
+ * // String pattern
+ * @eventHandler('order.placed')
+ * async handleOrder(@payload() data: OrderDto): Promise<void> { ... }
+ *
+ * // With transport and extras override
+ * @eventHandler('payment.received', {
+ *   transport: 'redis',
+ *   extras: {mode: 'stream', consumerGroup: 'payment-workers'},
+ * })
+ * async handlePayment(@payload() data: PaymentDto): Promise<void> { ... }
  * ```
  */
 export function eventHandler(
-  pattern: string,
-  options?: {transport?: string; extras?: Record<string, unknown>},
+  pattern: string | Record<string, unknown>,
+  options?: HandlerOptions,
 ): MethodDecorator {
+  const serializedPattern = normalizePattern(pattern);
+
   return MethodDecoratorFactory.createDecorator<EventHandlerMetadata>(
-    EVENT_HANDLER_METADATA.key,
+    EVENT_HANDLER_METADATA,
     {
-      pattern,
+      pattern: serializedPattern,
       transport: options?.transport,
       extras: options?.extras,
     },

@@ -8,7 +8,7 @@ Contributions are welcome. Please follow these guidelines.
 2. Create a feature branch from `main`
 3. Include tests for all changes
 4. Follow the coding rules below
-5. Run `npm test` and ensure all tests pass
+5. Run `npm run lint` and `npm test` and ensure both pass
 6. Submit a Pull Request
 
 ## Coding Rules

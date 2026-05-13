@@ -20,6 +20,22 @@ describe('JsonSerializer', () => {
     expect(serializer.serialize(42)).toBe('42');
     expect(serializer.serialize(null)).toBe('null');
   });
+
+  it('wraps circular reference errors', () => {
+    const serializer = new JsonSerializer();
+    const circular: Record<string, unknown> = {a: 1};
+    circular.self = circular;
+    expect(() => serializer.serialize(circular)).toThrow(
+      'Failed to serialize outgoing message',
+    );
+  });
+
+  it('wraps BigInt errors', () => {
+    const serializer = new JsonSerializer();
+    expect(() => serializer.serialize({value: BigInt(9007199254740991)})).toThrow(
+      'Failed to serialize outgoing message',
+    );
+  });
 });
 
 describe('JsonDeserializer', () => {
@@ -37,5 +53,27 @@ describe('JsonDeserializer', () => {
   it('deserializes arrays', () => {
     const deserializer = new JsonDeserializer();
     expect(deserializer.deserialize('[1,2,3]')).toEqual([1, 2, 3]);
+  });
+
+  it('wraps corrupted payload errors', () => {
+    const deserializer = new JsonDeserializer();
+    expect(() => deserializer.deserialize('not valid json')).toThrow(
+      'Failed to deserialize incoming message',
+    );
+  });
+
+  it('wraps empty payload errors', () => {
+    const deserializer = new JsonDeserializer();
+    expect(() => deserializer.deserialize('')).toThrow(
+      'Failed to deserialize incoming message',
+    );
+  });
+
+  it('wraps corrupted Buffer errors', () => {
+    const deserializer = new JsonDeserializer();
+    const buffer = Buffer.from('}{broken', 'utf-8');
+    expect(() => deserializer.deserialize(buffer)).toThrow(
+      'Failed to deserialize incoming message',
+    );
   });
 });

@@ -15,17 +15,19 @@ export interface MessageHandler<
     | Observable<TResult>;
 
   /**
-   * Next handler in the chain (for multiple event handlers on the same pattern).
-   */
-  next?: MessageHandler<TInput, TContext, TResult>;
-
-  /**
    * True for @eventHandler, false for @messageHandler.
    */
   isEventHandler?: boolean;
 
   /**
-   * Transport-specific metadata (e.g., QoS for MQTT, consumer group for Kafka).
+   * Target transport name (e.g., 'kafka', 'rabbitmq').
+   * First-class property for routing, not buried in extras.
    */
-  extras?: Record<string, unknown>;
+  transport?: string;
+
+  /**
+   * Transport-specific metadata (e.g., QoS for MQTT, consumer group for Kafka).
+   * Does not contain framework routing metadata (use transport field instead).
+   */
+  extras?: Readonly<Record<string, unknown>>;
 }

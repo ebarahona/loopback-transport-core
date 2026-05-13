@@ -14,7 +14,7 @@
     "lint": "eslint \"src/**/*.ts\"",
     "test": "vitest run",
     "test:dev": "vitest",
-    "prepublishOnly": "npm run clean && npm run build && npm test"
+    "prepublishOnly": "npm run clean && npm run lint && npm run build && npm test"
   },
   "keywords": [
     "loopback",
@@ -42,7 +42,7 @@
   "homepage": "https://github.com/ebarahona/loopback-transport-core#readme",
   "peerDependencies": {
     "@loopback/core": ">=7.0.0",
-    "@loopback/rest": ">=15.0.0"
+    "@loopback/metadata": ">=8.0.0"
   },
   "dependencies": {
     "debug": "^4.3.4",
@@ -54,6 +54,9 @@
     "@loopback/rest": "^15.0.13",
     "@loopback/testlab": "^8.0.12",
     "@types/debug": "^4.1.12",
+    "@typescript-eslint/eslint-plugin": "^8.59.3",
+    "@typescript-eslint/parser": "^8.59.3",
+    "eslint": "^10.3.0",
     "prettier": "^3.2.0",
     "rimraf": "^5.0.0",
     "typescript": "~5.2.2",
@@ -61,7 +64,6 @@
   },
   "files": [
     "dist",
-    "src",
     "README.md",
     "LICENSE"
   ],

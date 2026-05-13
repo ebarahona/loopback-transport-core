@@ -4,8 +4,12 @@ export {TransportComponent} from './transport.component';
 // Booter
 export {TransportBooter} from './transport-booter';
 
-// Binding keys
-export {TransportBindings} from './keys';
+// Binding keys and tags
+export {
+  TransportBindings,
+  TRANSPORT_SERVER_TAG,
+  TRANSPORT_NAME_TAG,
+} from './keys';
 
 // Registry
 export {HandlerRegistry} from './registry';
@@ -41,17 +45,21 @@ export {
   eventHandler,
   payload,
   transportCtx,
+  HandlerOptions,
   MessageHandlerMetadata,
   EventHandlerMetadata,
   MESSAGE_HANDLER_METADATA,
   EVENT_HANDLER_METADATA,
 } from './decorators';
 
+// Utils
+export {normalizePattern} from './utils';
+
 // Client
 export {ClientProxy} from './client';
 
 // Server
-export {ServerBase} from './server';
+export {ServerBase, HandlerResult} from './server';
 
 // Serializers
 export {
@@ -59,4 +67,5 @@ export {
   Deserializer,
   JsonSerializer,
   JsonDeserializer,
+  TransportPacket,
 } from './serializers';

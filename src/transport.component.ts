@@ -1,31 +1,43 @@
-import {Binding, BindingScope, Component} from '@loopback/core';
+import {
+  Binding,
+  BindingScope,
+  Component,
+  Constructor,
+  LifeCycleObserver,
+} from '@loopback/core';
+import {TransportBindings} from './keys';
 import {HandlerRegistry} from './registry';
 import {TransportBooter} from './transport-booter';
-import {TransportBindings} from './keys';
 
 /**
  * LoopBack 4 component that enables transport-agnostic microservices.
  *
- * Registers:
+ * Registers the core transport extension points:
  * - HandlerRegistry (singleton): discovers and manages transport handlers
  * - TransportBooter (lifecycle observer): wires handlers to servers at boot
  *
- * The booter runs after all controllers are registered, scans for
- * @messageHandler/@eventHandler metadata, binds handlers to transport
- * servers, and starts/stops listeners with the application lifecycle.
+ * The component intentionally stays thin. Discovery, validation,
+ * server binding, and listener lifecycle management live in the
+ * TransportBooter/HandlerRegistry layer so the component remains a
+ * stable package boundary for transport adapters.
  *
  * Usage:
  * ```typescript
  * const app = new Application();
  * app.component(TransportComponent);
  * ```
+ *
+ * Transport adapters can build on top of this component by contributing
+ * server bindings and configuration under TransportBindings.
  */
 export class TransportComponent implements Component {
-  bindings: Binding[] = [
+  readonly bindings: Binding<unknown>[] = [
     Binding.bind(TransportBindings.HANDLER_REGISTRY)
       .toClass(HandlerRegistry)
       .inScope(BindingScope.SINGLETON),
   ];
 
-  lifeCycleObservers = [TransportBooter];
+  readonly lifeCycleObservers: Constructor<LifeCycleObserver>[] = [
+    TransportBooter,
+  ];
 }
