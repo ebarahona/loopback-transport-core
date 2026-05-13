@@ -37,7 +37,7 @@ describe('ServerBase', () => {
       expect(registered?.next).toBe(handler2);
     });
 
-    it('replaces message handler (not event handler) on same pattern', () => {
+    it('throws on duplicate message handler for same pattern', () => {
       const server = new TestServer();
       const handler1: MessageHandler = async () => 'first';
       handler1.isEventHandler = false;
@@ -45,9 +45,9 @@ describe('ServerBase', () => {
       handler2.isEventHandler = false;
 
       server.addHandler('order.get', handler1);
-      server.addHandler('order.get', handler2);
-
-      expect(server.getHandlerByPattern('order.get')).toBe(handler2);
+      expect(() => server.addHandler('order.get', handler2)).toThrow(
+        'Handler already registered for pattern: order.get',
+      );
     });
   });
 
@@ -128,7 +128,7 @@ describe('ServerBase', () => {
       );
 
       expect(responses).toEqual([
-        {err: 'Handler failed', isDisposed: true},
+        {err: {message: 'Handler failed', name: 'Error'}, isDisposed: true},
       ]);
     });
   });
@@ -207,6 +207,58 @@ describe('ServerBase', () => {
       expect(normalize.call(server, {service: 'order', cmd: 'get'})).toBe(
         '{"cmd":"get","service":"order"}',
       );
+    });
+
+    it('deep sorts nested object keys', () => {
+      const server = new TestServer();
+      const normalize = (server as unknown as {normalizePattern: Function})
+        .normalizePattern;
+      expect(
+        normalize.call(server, {
+          meta: {version: 2, type: 'cmd'},
+          action: 'get',
+        }),
+      ).toBe('{"action":"get","meta":{"type":"cmd","version":2}}');
+    });
+  });
+
+  describe('error serialization', () => {
+    it('serializes Error instances with name and message', async () => {
+      const server = new TestServer();
+      const handler: MessageHandler = async () => {
+        throw new TypeError('Invalid input');
+      };
+      server.addHandler('fail', handler);
+
+      const responses: WritePacket[] = [];
+      await (server as unknown as {handleMessage: Function}).handleMessage(
+        {pattern: 'fail', data: {}, id: 'req-1'},
+        (packet: WritePacket) => responses.push(packet),
+      );
+
+      expect(responses[0].err).toEqual({
+        message: 'Invalid input',
+        name: 'TypeError',
+      });
+      expect(responses[0].isDisposed).toBe(true);
+    });
+  });
+
+  describe('addHandler with normalized patterns', () => {
+    it('normalizes patterns on registration and lookup', () => {
+      const server = new TestServer();
+      const handler: MessageHandler = async (data) => data;
+      handler.isEventHandler = false;
+
+      // Register with unsorted keys
+      server.addHandler(
+        server['normalizePattern']({service: 'order', cmd: 'get'}),
+        handler,
+      );
+
+      // Lookup with different key order
+      const found = server.getHandlerByPattern({cmd: 'get', service: 'order'});
+      expect(found).toBe(handler);
     });
   });
 });
