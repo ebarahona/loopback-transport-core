@@ -1,6 +1,6 @@
 {
   "name": "@ebarahona/loopback-transport-core",
-  "version": "0.0.0",
+  "version": "1.1.0",
   "description": "Transport-agnostic microservice primitives for LoopBack 4 — message handlers, event patterns, execution context, and client proxies for Kafka, RabbitMQ, gRPC, MQTT, and NATS.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
