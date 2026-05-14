@@ -5,7 +5,6 @@
       "release-type": "node",
       "package-name": "@ebarahona/loopback-transport-core",
       "changelog-path": "CHANGELOG.md",
-      "release-as": "1.0.0",
       "draft": false,
       "prerelease": false,
       "bump-minor-pre-major": false,
