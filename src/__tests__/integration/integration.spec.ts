@@ -9,8 +9,10 @@ import {
   eventHandler,
   payload,
   transportCtx,
+  registerServer,
+  registerServerClass,
   WritePacket,
-} from '../index';
+} from '../../index';
 
 // ---- Test transport server ----
 
@@ -59,12 +61,16 @@ class InMemoryServer extends ServerBase {
 
 class OrderController {
   @messageHandler('order.get')
-  async getOrder(@payload() data: {id: string}): Promise<{id: string; name: string}> {
+  async getOrder(
+    @payload() data: {id: string},
+  ): Promise<{id: string; name: string}> {
     return {id: data.id, name: 'Test Order'};
   }
 
   @messageHandler({cmd: 'order.create', version: 2})
-  async createOrder(@payload() _data: {name: string}): Promise<{created: boolean}> {
+  async createOrder(
+    @payload() _data: {name: string},
+  ): Promise<{created: boolean}> {
     return {created: true};
   }
 }
@@ -105,7 +111,7 @@ describe('Integration: full pipeline', () => {
     app.component(TransportComponent);
 
     server = new InMemoryServer();
-    TransportBindings.registerServer(app, 'memory', server);
+    registerServer(app, 'memory', server);
   });
 
   afterEach(async () => {
@@ -121,7 +127,9 @@ describe('Integration: full pipeline', () => {
 
       expect(server.started).toBe(true);
 
-      const {responses, result} = await server.sendMessage('order.get', {id: '123'});
+      const {responses, result} = await server.sendMessage('order.get', {
+        id: '123',
+      });
 
       expect(result.outcome).toBe('success');
       expect(responses).toEqual([
@@ -151,12 +159,8 @@ describe('Integration: full pipeline', () => {
 
       await server.sendEvent('order.placed', {orderId: 'abc'});
 
-      expect(NotificationController.calls).toEqual([
-        'placed:abc',
-        'audit:abc',
-      ]);
+      expect(NotificationController.calls).toEqual(['placed:abc', 'audit:abc']);
     });
-
   });
 
   describe('parameter injection', () => {
@@ -171,7 +175,7 @@ describe('Integration: full pipeline', () => {
       );
 
       expect(result.outcome).toBe('success');
-      expect(responses[0].response).toEqual({
+      expect(responses[0]?.response).toEqual({
         value: 'hello',
         broker: 'kafka',
       });
@@ -216,7 +220,7 @@ describe('Integration: full pipeline', () => {
       const classApp = new Application();
       classApp.component(TransportComponent);
       classApp.controller(OrderController);
-      TransportBindings.registerServerClass(classApp, 'memory', InMemoryServer);
+      registerServerClass(classApp, 'memory', InMemoryServer);
 
       await classApp.start();
 

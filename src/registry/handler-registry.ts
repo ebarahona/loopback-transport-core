@@ -4,18 +4,26 @@ import {
   Context,
   injectable,
   invokeMethod,
-  MetadataInspector,
+  type Constructor,
 } from '@loopback/core';
 import {randomUUID} from 'crypto';
 import debugFactory from 'debug';
 import {isObservable, Observable} from 'rxjs';
+import type {
+  DiscoveredHandler,
+  HandlerDiscoverer,
+  HandlerKind,
+} from '../discovery';
+import {HANDLER_KIND_EVENT} from '../discovery';
+import type {HandlerOptions} from '../decorators';
+import {TransportConfigError} from '../helpers/errors';
+import type {MessageHandler, TransportServer} from '../interfaces';
 import {
-  MESSAGE_HANDLER_METADATA,
-  EVENT_HANDLER_METADATA,
-  MessageHandlerMetadata,
-} from '../decorators';
-import {TransportServer, MessageHandler} from '../interfaces';
-import {TransportBindings, TRANSPORT_SERVER_TAG, TRANSPORT_NAME_TAG} from '../keys';
+  HANDLER_DISCOVERER_TAG,
+  TRANSPORT_NAME_TAG,
+  TRANSPORT_SERVER_TAG,
+  TransportBindings,
+} from '../keys';
 import {normalizePattern} from '../utils';
 
 const debug = debugFactory('loopback:transport:registry');
@@ -27,72 +35,162 @@ const debug = debugFactory('loopback:transport:registry');
 const KEY_SEPARATOR = '::';
 
 /**
- * Type-safe controller class and instance signatures.
+ * Type-safe controller instance signature.
  */
-type ControllerConstructor = abstract new (...args: never[]) => unknown;
 type ControllerInstance = Record<string, (...args: unknown[]) => unknown>;
 
 /**
- * Discovers @messageHandler and @eventHandler decorated methods
- * from controllers and registers them with the appropriate transport server.
+ * Internal registry entry tracking both the runtime handler function
+ * and the metadata required to construct a {@link RegisteredHandler}
+ * view for cross-cutting wrappers and the {@link DiscoveryService}.
+ *
+ * @internal
+ */
+export interface RegistryEntry {
+  /** Original (unnormalized) pattern as supplied by the discoverer. */
+  readonly pattern: string | Record<string, unknown>;
+  /** Transport server tag (`'*'` for wildcard). */
+  readonly transport: string;
+  /** Handler kind. */
+  readonly kind: HandlerKind;
+  /** Controller class that declared this handler. */
+  readonly controllerClass: Constructor<unknown>;
+  /** Method name on the controller prototype. */
+  readonly methodName: string;
+  /** Id of the discoverer that produced this entry. */
+  readonly discovererId: string;
+  /** Discoverer-specific handler options. */
+  readonly options?: HandlerOptions;
+  /**
+   * Live handler function. Mutable so the lifecycle observer can swap
+   * in the wrapped version between discovery and server-binding.
+   */
+  handler: MessageHandler;
+}
+
+/**
+ * Discovers transport handlers from controllers via every bound
+ * {@link HandlerDiscoverer} and registers them with the appropriate
+ * transport server.
+ *
+ * The two built-in vocabularies (`@messageHandler` and `@eventHandler`)
+ * are implemented as default discoverers bound by `TransportComponent`.
+ * Plugins (gRPC, cron, WebSocket, etc.) contribute additional decorator
+ * vocabularies by binding their own `HandlerDiscoverer` implementations
+ * under `TransportBindings.tags.HANDLER_DISCOVERER`.
  *
  * This class does NOT run in the constructor. It is invoked by
- * TransportBooter after all controllers are registered.
+ * `TransportBooter` after all controllers are registered.
  *
  * Handler invocations use per-message child contexts for concurrency
  * safety. The application context is never mutated per-message.
  *
- * Context lifetime extends until the handler result (including Observable
- * streams) fully completes, errors, or times out.
+ * Context lifetime extends until the handler result (including
+ * Observable streams) fully completes, errors, or times out.
+ *
+ * @public
  */
 @injectable({scope: BindingScope.SINGLETON})
 export class HandlerRegistry {
   /**
    * Registry keyed by `transport::pattern` to support the same pattern
-   * on different transports without collision.
+   * on different transports without collision. Each value is the chain
+   * of entries for that pattern (multiple allowed for event fan-out).
    */
-  private readonly handlers = new Map<string, MessageHandler[]>();
+  private readonly entries = new Map<string, RegistryEntry[]>();
   private discovered = false;
 
   /**
    * Scan all controllers in the application for transport decorators
    * and register the handlers.
    *
+   * Discovers handlers by consulting every `HandlerDiscoverer` bound
+   * under `TransportBindings.tags.HANDLER_DISCOVERER`, including the
+   * built-in `MessageHandlerDiscoverer` and `EventHandlerDiscoverer`
+   * registered by `TransportComponent`, plus any plugin-contributed
+   * discoverers.
+   *
    * Idempotent: clears previously discovered handlers before scanning.
+   *
+   * @public
+   * @param app - The LoopBack application instance.
+   * @returns Resolves once every controller has been scanned.
+   * @throws TransportConfigError When the same pattern is targeted by
+   *   both `@messageHandler` and `@eventHandler`, or by two
+   *   `@messageHandler` declarations.
    */
   async discoverHandlers(app: Application): Promise<void> {
-    this.handlers.clear();
+    this.entries.clear();
     this.discovered = false;
+
+    const discovererBindings = app.findByTag(HANDLER_DISCOVERER_TAG);
+    const discoverers: HandlerDiscoverer[] = [];
+    for (const binding of discovererBindings) {
+      discoverers.push(await app.get<HandlerDiscoverer>(binding.key));
+    }
 
     const controllerBindings = app.findByTag('controller');
     debug(
-      'scanning %d controllers for transport handlers',
+      'scanning %d controllers with %d discoverers',
       controllerBindings.length,
+      discoverers.length,
     );
+
+    const perDiscovererCounts = new Map<string, number>();
 
     for (const binding of controllerBindings) {
       const controllerClass = binding.valueConstructor;
       if (!controllerClass) continue;
 
       const bindingKey = binding.key;
-      this.scanMessageHandlers(controllerClass, bindingKey, app);
-      this.scanEventHandlers(controllerClass, bindingKey, app);
+      for (const discoverer of discoverers) {
+        const found = await discoverer.discover(controllerClass);
+        if (found.length === 0) continue;
+        perDiscovererCounts.set(
+          discoverer.id,
+          (perDiscovererCounts.get(discoverer.id) ?? 0) + found.length,
+        );
+        for (const item of found) {
+          this.registerDiscovered(
+            item,
+            controllerClass,
+            bindingKey,
+            app,
+            discoverer.id,
+          );
+        }
+      }
     }
 
     this.discovered = true;
-    debug('discovered %d transport handlers', this.handlers.size);
+
+    if (debug.enabled) {
+      for (const [id, count] of perDiscovererCounts) {
+        debug('discoverer [%s] contributed %d handlers', id, count);
+      }
+      debug('discovered %d transport handlers total', this.entries.size);
+    }
   }
 
   /**
    * Bind discovered handlers to the registered transport servers.
-   * Throws if discovery has not been run.
    *
-   * Handles precedence: transport-specific handlers override wildcard
-   * handlers for the same pattern on that transport's server.
+   * Precedence rules:
+   *
+   * - Request handlers: transport-specific overrides wildcard (only one
+   *   per pattern survives).
+   * - Event handlers: both specific and wildcard run (fan-out).
+   *
+   * @public
+   * @param app - The LoopBack application instance.
+   * @returns Resolves once every handler has been bound.
+   * @throws TransportConfigError When `discoverHandlers()` has not been
+   *   called first, or when a transport server binding is missing the
+   *   `TRANSPORT_NAME_TAG` tag.
    */
   async bindToServers(app: Application): Promise<void> {
     if (!this.discovered) {
-      throw new Error(
+      throw new TransportConfigError(
         'Cannot bind handlers to servers: discoverHandlers() has not been called.',
       );
     }
@@ -100,10 +198,18 @@ export class HandlerRegistry {
     const serverBindings = app.findByTag(TRANSPORT_SERVER_TAG);
 
     for (const serverBinding of serverBindings) {
+      const tag = serverBinding.tagMap?.[TRANSPORT_NAME_TAG];
+      if (typeof tag !== 'string' || tag.length === 0) {
+        throw new TransportConfigError(
+          `Transport server binding "${String(serverBinding.key)}" is ` +
+            `missing the "${TRANSPORT_NAME_TAG}" tag. Register the ` +
+            'server through registerServer/registerServerClass/' +
+            'registerServerProvider so the registry can route handlers ' +
+            'to the correct transport.',
+        );
+      }
+      const transportName: string = tag;
       const server = await app.get<TransportServer>(serverBinding.key);
-      const transportName = serverBinding.tagMap?.[TRANSPORT_NAME_TAG] as
-        | string
-        | undefined;
 
       // Collect handlers for this server.
       // Precedence rules differ by handler type:
@@ -112,13 +218,15 @@ export class HandlerRegistry {
       const boundRequestPatterns = new Set<string>();
 
       // First pass: transport-specific handlers
-      for (const [registryKey, handlers] of this.handlers) {
-        if (handlers[0].transport && handlers[0].transport === transportName) {
+      for (const [registryKey, entryChain] of this.entries) {
+        const first = entryChain[0];
+        if (!first) continue;
+        if (first.transport !== '*' && first.transport === transportName) {
           const pattern = this.extractPattern(registryKey);
-          for (const handler of handlers) {
-            server.addHandler(pattern, handler);
+          for (const entry of entryChain) {
+            server.addHandler(pattern, entry.handler);
           }
-          if (!handlers[0].isEventHandler) {
+          if (first.kind !== HANDLER_KIND_EVENT) {
             boundRequestPatterns.add(pattern);
           }
           debug(
@@ -132,17 +240,22 @@ export class HandlerRegistry {
       // Second pass: wildcard handlers
       // - Request handlers: skip if transport-specific already bound
       // - Event handlers: always bind (fan-out semantics)
-      for (const [registryKey, handlers] of this.handlers) {
-        if (!handlers[0].transport) {
+      for (const [registryKey, entryChain] of this.entries) {
+        const first = entryChain[0];
+        if (!first) continue;
+        if (first.transport === '*') {
           const pattern = this.extractPattern(registryKey);
-          if (handlers[0].isEventHandler || !boundRequestPatterns.has(pattern)) {
-            for (const handler of handlers) {
-              server.addHandler(pattern, handler);
+          if (
+            first.kind === HANDLER_KIND_EVENT ||
+            !boundRequestPatterns.has(pattern)
+          ) {
+            for (const entry of entryChain) {
+              server.addHandler(pattern, entry.handler);
             }
             debug(
               'bound handler [%s] to transport [%s] (wildcard)',
               pattern,
-              transportName ?? 'default',
+              transportName,
             );
           }
         }
@@ -151,21 +264,43 @@ export class HandlerRegistry {
   }
 
   /**
-   * Get all discovered handlers.
+   * Get all discovered handlers. The returned map is a defensive copy.
+   *
+   * @public
+   * @returns A read-only snapshot of every registered pattern and its
+   *   handler chain.
    */
   getHandlers(): ReadonlyMap<string, readonly MessageHandler[]> {
     const copy = new Map<string, readonly MessageHandler[]>();
-    for (const [key, handlers] of this.handlers) {
-      copy.set(key, [...handlers]);
+    for (const [key, entries] of this.entries) {
+      copy.set(
+        key,
+        entries.map(e => e.handler),
+      );
     }
     return copy;
   }
 
   /**
-   * Whether discovery has been run.
+   * Whether {@link discoverHandlers} has been run.
+   *
+   * @public
    */
   isDiscovered(): boolean {
     return this.discovered;
+  }
+
+  /** @internal Package-scoped accessor used by TransportObserver to build the DiscoveryService snapshot. */
+  _getEntries(): IterableIterator<RegistryEntry> {
+    return this.iterateEntries();
+  }
+
+  private *iterateEntries(): IterableIterator<RegistryEntry> {
+    for (const chain of this.entries.values()) {
+      for (const entry of chain) {
+        yield entry;
+      }
+    }
   }
 
   /**
@@ -190,113 +325,114 @@ export class HandlerRegistry {
       : key;
   }
 
-  private scanMessageHandlers(
-    controllerClass: ControllerConstructor,
-    controllerBindingKey: string,
-    app: Application,
-  ): void {
-    this.scanHandlers(
-      controllerClass,
-      controllerBindingKey,
-      app,
-      MESSAGE_HANDLER_METADATA.key,
-      false,
-    );
-  }
-
-  private scanEventHandlers(
-    controllerClass: ControllerConstructor,
-    controllerBindingKey: string,
-    app: Application,
-  ): void {
-    this.scanHandlers(
-      controllerClass,
-      controllerBindingKey,
-      app,
-      EVENT_HANDLER_METADATA.key,
-      true,
-    );
-  }
-
   /**
-   * Shared scanner for both @messageHandler and @eventHandler metadata.
-   * The isEvent flag controls duplicate/chaining rules.
+   * Convert a `DiscoveredHandler` into a runtime `MessageHandler`,
+   * applying validation rules (no mixed kinds per pattern, no duplicate
+   * request handlers) before inserting into the registry.
    */
-  private scanHandlers(
-    controllerClass: ControllerConstructor,
+  private registerDiscovered(
+    discovered: DiscoveredHandler,
+    controllerClass: Constructor<unknown>,
     controllerBindingKey: string,
     app: Application,
-    metadataKey: string,
-    isEvent: boolean,
+    discovererId: string,
   ): void {
-    const methods =
-      MetadataInspector.getAllMethodMetadata<MessageHandlerMetadata>(
-        metadataKey,
-        controllerClass.prototype,
+    const isEvent = discovered.kind === HANDLER_KIND_EVENT;
+    const rawTransport = discovered.transport;
+    const transportForKey = rawTransport === '*' ? undefined : rawTransport;
+    const key = this.buildKey(transportForKey, discovered.pattern);
+    const keyOrPattern = normalizePattern(discovered.pattern);
+    const existing = this.entries.get(key);
+    const firstExisting = existing?.[0];
+
+    // Reject mixed handler types on the same pattern.
+    if (firstExisting && firstExisting.kind !== discovered.kind) {
+      throw new TransportConfigError(
+        `Cannot mix handler kinds for pattern "${keyOrPattern}" on transport "${rawTransport}": ` +
+          `existing kind "${firstExisting.kind}" from ` +
+          `${firstExisting.controllerClass.name}.${firstExisting.methodName} ` +
+          `(discoverer "${firstExisting.discovererId}") conflicts with ` +
+          `new kind "${discovered.kind}" from ` +
+          `${controllerClass.name}.${discovered.methodName} ` +
+          `(discoverer "${discovererId}").`,
       );
-    if (!methods) return;
+    }
 
-    const decoratorName = isEvent ? '@eventHandler' : '@messageHandler';
-
-    for (const [methodName, metadata] of Object.entries(methods)) {
-      const key = this.buildKey(metadata.transport, metadata.pattern);
-      const existing = this.handlers.get(key);
-
-      // Reject mixed handler types on the same pattern
-      if (existing && existing[0].isEventHandler !== isEvent) {
-        throw new Error(
-          `Cannot mix @messageHandler and @eventHandler for pattern: ${normalizePattern(metadata.pattern)}. ` +
-            'A pattern must be exclusively request/response or event.',
-        );
-      }
-
-      // Reject duplicate request/response handlers
-      if (existing && !isEvent) {
-        throw new Error(
-          `Duplicate @messageHandler for pattern: ${normalizePattern(metadata.pattern)}. ` +
-            'Only one request/response handler per pattern is allowed.',
-        );
-      }
-
-      const handler: MessageHandler = this.createHandler(
-        controllerBindingKey,
-        methodName,
-        app,
+    // Reject duplicate request/response handlers.
+    if (firstExisting && !isEvent) {
+      throw new TransportConfigError(
+        `Duplicate request handler for pattern "${keyOrPattern}" on transport "${rawTransport}": ` +
+          `pattern is already bound to ` +
+          `${firstExisting.controllerClass.name}.${firstExisting.methodName} ` +
+          `contributed by discoverer "${firstExisting.discovererId}".`,
       );
-      handler.isEventHandler = isEvent;
-      handler.transport = metadata.transport;
-      handler.extras = metadata.extras;
+    }
 
-      if (existing) {
-        existing.push(handler);
+    const handler: MessageHandler = this.createHandler(
+      controllerBindingKey,
+      discovered.methodName,
+      app,
+    );
+    handler.isEventHandler = isEvent;
+    if (transportForKey !== undefined) {
+      handler.transport = transportForKey;
+    }
+    if (discovered.options?.extras !== undefined) {
+      handler.extras = discovered.options.extras;
+    }
+
+    const entry: RegistryEntry = {
+      pattern: discovered.pattern,
+      transport: rawTransport,
+      kind: discovered.kind,
+      controllerClass,
+      methodName: discovered.methodName,
+      discovererId,
+      ...(discovered.options !== undefined
+        ? {options: discovered.options}
+        : {}),
+      handler,
+    };
+
+    const decoratorLabel = `@${discovererId}Handler`;
+    if (existing) {
+      if (firstExisting && firstExisting.discovererId !== entry.discovererId) {
         debug(
-          'chained %s [%s] on %s.%s',
-          decoratorName,
-          normalizePattern(metadata.pattern),
-          controllerClass.name,
-          methodName,
-        );
-      } else {
-        this.handlers.set(key, [handler]);
-        debug(
-          'discovered %s [%s] on %s.%s',
-          decoratorName,
-          normalizePattern(metadata.pattern),
-          controllerClass.name,
-          methodName,
+          'event handler chain on pattern %s (transport %s) now spans discoverers: %s + %s',
+          keyOrPattern,
+          rawTransport,
+          firstExisting.discovererId,
+          entry.discovererId,
         );
       }
+      existing.push(entry);
+      debug(
+        'chained %s [%s] on %s.%s',
+        decoratorLabel,
+        keyOrPattern,
+        controllerClass.name,
+        discovered.methodName,
+      );
+    } else {
+      this.entries.set(key, [entry]);
+      debug(
+        'discovered %s [%s] on %s.%s',
+        decoratorLabel,
+        normalizePattern(discovered.pattern),
+        controllerClass.name,
+        discovered.methodName,
+      );
     }
   }
 
   /**
-   * Create a handler function that invokes the controller method through
-   * LoopBack's native invocation pipeline.
+   * Create a handler function that invokes the controller method
+   * through LoopBack's native invocation pipeline.
    *
    * Each invocation creates a uniquely named child Context from the
-   * application context. Per-message bindings (payload, transport context)
-   * are scoped to the child context and cannot collide with concurrent
-   * messages.
+   * application context. Per-message bindings (payload, transport
+   * context) are scoped to the child context and cannot collide with
+   * concurrent messages.
    *
    * The child context lifetime extends until the handler result fully
    * resolves. For Observable results, the context stays open until the
@@ -317,9 +453,10 @@ export class HandlerRegistry {
       );
 
       // Idempotent cleanup guard: Context.close() is synchronous but
-      // may be reached from multiple paths (error + teardown) for Observables
+      // may be reached from multiple paths (error + teardown) for
+      // Observables.
       let closed = false;
-      const cleanup = () => {
+      const cleanup = (): void => {
         if (!closed) {
           closed = true;
           invocationCtx.close();
@@ -335,14 +472,14 @@ export class HandlerRegistry {
 
         const method = controller[methodName];
         if (typeof method !== 'function') {
-          throw new Error(
+          throw new TransportConfigError(
             `Transport handler method "${methodName}" not found on controller "${controllerBindingKey}"`,
           );
         }
 
-        // Invoke through LoopBack's method invocation pipeline
-        // This honors parameter injection, interceptors, and other
-        // framework invocation semantics
+        // Invoke through LoopBack's method invocation pipeline so we
+        // honour parameter injection, interceptors, and other framework
+        // invocation semantics.
         const result = await invokeMethod(
           controller,
           methodName,
@@ -350,7 +487,7 @@ export class HandlerRegistry {
           [data, context],
         );
 
-        // For Observable results, defer context cleanup until stream completes
+        // For Observable results, defer context cleanup until stream completes.
         if (isObservable(result)) {
           const obs = result as Observable<unknown>;
           return new Observable(subscriber => {
@@ -372,7 +509,7 @@ export class HandlerRegistry {
           });
         }
 
-        // For non-Observable results, close context immediately
+        // For non-Observable results, close context immediately.
         cleanup();
         return result;
       } catch (err) {

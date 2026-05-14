@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest';
-import {JsonSerializer, JsonDeserializer} from '../serializers';
+import {JsonSerializer, JsonDeserializer} from '../../serializers';
 
 describe('JsonSerializer', () => {
   it('serializes objects to JSON strings', () => {
@@ -32,9 +32,9 @@ describe('JsonSerializer', () => {
 
   it('wraps BigInt errors', () => {
     const serializer = new JsonSerializer();
-    expect(() => serializer.serialize({value: BigInt(9007199254740991)})).toThrow(
-      'Failed to serialize outgoing message',
-    );
+    expect(() =>
+      serializer.serialize({value: BigInt(9007199254740991)}),
+    ).toThrow('Failed to serialize outgoing message');
   });
 });
 

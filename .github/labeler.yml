@@ -1,0 +1,76 @@
+area:server:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/server/**'
+
+area:client:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/client/**'
+
+area:registry:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/registry/**'
+
+area:context:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/context/**'
+
+area:decorators:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/decorators/**'
+
+area:serializers:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/serializers/**'
+
+area:interfaces:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/interfaces/**'
+
+area:component:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/transport.component.ts'
+          - 'src/transport.observer.ts'
+          - 'src/keys.ts'
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/__tests__/**'
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.md'
+          - 'docs/**'
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/workflows/**'
+          - '.github/**/*.yml'
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'package.json'
+          - 'package-lock.json'
+
+hooks:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.githooks/**'
+          - 'lefthook.yml'
+          - 'scripts/install-hooks.sh'
+
+bench:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'bench/**'

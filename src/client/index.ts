@@ -1,1 +1,1 @@
-export * from './client-proxy';
+export {ClientProxy} from './client-proxy';

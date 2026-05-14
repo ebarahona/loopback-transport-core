@@ -1,11 +1,12 @@
 import {describe, it, expect} from 'vitest';
-import {ServerBase, HandlerResult} from '../server';
-import {
+import {ServerBase} from '../../server';
+import type {HandlerResult} from '../../server';
+import type {
+  IncomingEvent,
+  IncomingRequest,
   MessageHandler,
   WritePacket,
-  IncomingRequest,
-  IncomingEvent,
-} from '../interfaces';
+} from '../../interfaces';
 import {of} from 'rxjs';
 
 /**
@@ -31,10 +32,7 @@ class TestServer extends ServerBase {
     return this.handleMessage(request, respond, context);
   }
 
-  testHandleEvent(
-    event: IncomingEvent,
-    context?: unknown,
-  ): Promise<void> {
+  testHandleEvent(event: IncomingEvent, context?: unknown): Promise<void> {
     return this.handleEvent(event, context);
   }
 
@@ -47,7 +45,7 @@ describe('ServerBase', () => {
   describe('addHandler / getHandlers', () => {
     it('registers a message handler', () => {
       const server = new TestServer();
-      const handler: MessageHandler = async (data) => data;
+      const handler: MessageHandler = async data => data;
       handler.isEventHandler = false;
       server.addHandler('order.get', handler);
       expect(server.getHandlers().size).toBe(1);
@@ -72,8 +70,12 @@ describe('ServerBase', () => {
       expect(handlers![1]).toBe(handler2);
 
       // Handler objects are not mutated (no .next chain)
-      expect((handler1 as Record<string, unknown>).next).toBeUndefined();
-      expect((handler2 as Record<string, unknown>).next).toBeUndefined();
+      expect(
+        (handler1 as unknown as Record<string, unknown>).next,
+      ).toBeUndefined();
+      expect(
+        (handler2 as unknown as Record<string, unknown>).next,
+      ).toBeUndefined();
     });
 
     it('throws on duplicate message handler for same pattern', () => {
@@ -230,8 +232,8 @@ describe('ServerBase', () => {
       );
 
       expect(result.outcome).toBe('handler-error');
-      expect(responses[0].err).toBe('TypeError: Invalid input');
-      expect(responses[0].isDisposed).toBe(true);
+      expect(responses[0]?.err).toBe('TypeError: Invalid input');
+      expect(responses[0]?.isDisposed).toBe(true);
     });
   });
 
@@ -315,10 +317,7 @@ describe('ServerBase', () => {
       pattern.self = pattern;
 
       expect(() =>
-        server.addHandler(
-          server.testNormalizePattern(pattern),
-          handler,
-        ),
+        server.addHandler(server.testNormalizePattern(pattern), handler),
       ).toThrow('Circular reference');
     });
   });
@@ -326,7 +325,7 @@ describe('ServerBase', () => {
   describe('addHandler with normalized patterns', () => {
     it('normalizes patterns on registration and lookup', () => {
       const server = new TestServer();
-      const handler: MessageHandler = async (data) => data;
+      const handler: MessageHandler = async data => data;
       handler.isEventHandler = false;
 
       // Register with unsorted keys

@@ -4,6 +4,10 @@ import {TransportBindings} from '../keys';
 /**
  * Parameter decorator that injects the message payload.
  *
+ * @public
+ * @returns The `@inject` decorator bound to
+ *   `TransportBindings.CURRENT_PAYLOAD`.
+ *
  * @example
  * ```typescript
  * @eventHandler('order.placed')
@@ -18,11 +22,16 @@ export function payload() {
  * Parameter decorator that injects the transport-specific context.
  *
  * The context type depends on the transport:
- * - Kafka: KafkaContext (topic, partition, offset, consumer)
- * - RabbitMQ: RmqContext (channel, message, pattern)
- * - gRPC: GrpcContext (metadata, call)
- * - MQTT: MqttContext (topic, packet)
- * - NATS: NatsContext (subject, headers)
+ *
+ * - Kafka: `KafkaContext` (topic, partition, offset, consumer)
+ * - RabbitMQ: `RmqContext` (channel, message, pattern)
+ * - gRPC: `GrpcContext` (metadata, call)
+ * - MQTT: `MqttContext` (topic, packet)
+ * - NATS: `NatsContext` (subject, headers)
+ *
+ * @public
+ * @returns The `@inject` decorator bound to
+ *   `TransportBindings.CURRENT_CONTEXT`.
  *
  * @example
  * ```typescript

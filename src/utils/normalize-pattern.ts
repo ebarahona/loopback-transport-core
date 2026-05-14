@@ -1,19 +1,26 @@
+import {TransportPatternError} from '../helpers/errors';
+
 /**
  * Normalize a pattern to a consistent string key.
  *
- * Strings pass through as-is. Objects are deep-sorted by key
- * and JSON-stringified for consistent lookup regardless of
- * property insertion order.
+ * Strings pass through as-is. Objects are deep-sorted by key and
+ * JSON-stringified for consistent lookup regardless of property
+ * insertion order.
  *
  * Only JSON-compatible values are accepted: strings, finite numbers,
  * booleans, null, plain objects, and arrays. Non-JSON values
- * (undefined, functions, symbols, NaN, Infinity, BigInt, Date,
- * RegExp, Map, Set, class instances) are rejected deterministically.
+ * (`undefined`, functions, symbols, `NaN`, `Infinity`, `BigInt`,
+ * `Date`, `RegExp`, `Map`, `Set`, class instances) are rejected
+ * deterministically.
  *
  * Shared (non-circular) object references are allowed. Only true
  * cycles throw.
  *
- * @throws Error on circular references, non-JSON values, or non-plain objects.
+ * @public
+ * @param pattern - String or plain-object pattern.
+ * @returns A canonical string representation suitable as a registry key.
+ * @throws TransportPatternError On circular references, non-JSON
+ *   values, or non-plain objects.
  */
 export function normalizePattern(
   pattern: string | Record<string, unknown>,
@@ -40,7 +47,7 @@ function stableStringify(obj: unknown, seen: Set<object>): string {
   if (type === 'number') {
     const n = obj as number;
     if (!Number.isFinite(n)) {
-      throw new Error(
+      throw new TransportPatternError(
         `Pattern contains ${String(n)}, which is not JSON-serializable`,
       );
     }
@@ -53,16 +60,18 @@ function stableStringify(obj: unknown, seen: Set<object>): string {
     type === 'symbol' ||
     type === 'bigint'
   ) {
-    throw new Error(
+    throw new TransportPatternError(
       `Pattern contains ${type} value, which is not JSON-serializable`,
     );
   }
 
-  // At this point, type === 'object' and obj !== null
+  // At this point, type === 'object' and obj !== null.
   const o = obj as object;
 
   if (seen.has(o)) {
-    throw new Error('Circular reference detected in pattern object');
+    throw new TransportPatternError(
+      'Circular reference detected in pattern object',
+    );
   }
 
   if (Array.isArray(o)) {
@@ -75,7 +84,7 @@ function stableStringify(obj: unknown, seen: Set<object>): string {
 
   if (!isPlainObject(o)) {
     const name = o.constructor?.name ?? 'unknown';
-    throw new Error(
+    throw new TransportPatternError(
       `Pattern contains ${name} instance, which is not a plain object`,
     );
   }

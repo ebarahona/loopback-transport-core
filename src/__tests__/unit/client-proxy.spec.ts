@@ -1,6 +1,6 @@
 import {describe, it, expect} from 'vitest';
-import {ClientProxy} from '../client';
-import {ReadPacket, WritePacket, PacketId} from '../interfaces';
+import {ClientProxy} from '../../client';
+import type {PacketId, ReadPacket, WritePacket} from '../../interfaces';
 
 /**
  * Test subclass that exposes controllable delays and failure modes.
@@ -207,7 +207,9 @@ describe('ClientProxy', () => {
       client.closeDelay = 50;
       const closePromise = client.close();
 
-      await expect(client.emit('test', {})).rejects.toThrow('Client is closing');
+      await expect(client.emit('test', {})).rejects.toThrow(
+        'Client is closing',
+      );
       expect(client.dispatchCalls).toBe(1); // only the setup emit
 
       await closePromise;

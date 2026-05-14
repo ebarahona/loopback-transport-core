@@ -1,55 +1,93 @@
 // Component
 export {TransportComponent} from './transport.component';
 
-// Booter
-export {TransportBooter} from './transport-booter';
+// Lifecycle observer (was: transport-booter)
+export {TransportBooter} from './transport.observer';
 
 // Binding keys and tags
 export {
+  DESERIALIZER_TAG,
+  HANDLER_DISCOVERER_TAG,
+  SERIALIZER_TAG,
   TransportBindings,
-  TRANSPORT_SERVER_TAG,
   TRANSPORT_NAME_TAG,
+  TRANSPORT_SERVER_TAG,
 } from './keys';
+
+// Server registration helpers
+export {
+  registerServer,
+  registerServerClass,
+  registerServerProvider,
+} from './helpers/register-server';
+
+// Typed errors
+export {
+  TransportConfigError,
+  TransportError,
+  TransportPatternError,
+  TransportSerializationError,
+  TransportTimeoutError,
+} from './helpers/errors';
 
 // Registry
 export {HandlerRegistry} from './registry';
 
-// Interfaces
+// Handler discovery extension point
 export {
+  DiscoveryService,
+  EventHandlerDiscoverer,
+  HANDLER_KIND_EVENT,
+  HANDLER_KIND_REQUEST,
+  MessageHandlerDiscoverer,
+} from './discovery';
+export type {
+  DiscoveredHandler,
+  HandlerDiscoverer,
+  HandlerKind,
+  RegisteredHandler,
+} from './discovery';
+
+// Interfaces (type-only)
+export type {
+  IncomingEvent,
+  IncomingRequest,
+  IncomingResponse,
+  MessageHandler,
+  OutgoingEvent,
+  OutgoingRequest,
   PacketId,
   ReadPacket,
-  WritePacket,
-  OutgoingRequest,
-  OutgoingEvent,
-  IncomingRequest,
-  IncomingEvent,
-  IncomingResponse,
-  TransportServer,
   TransportClient,
+  TransportServer,
   TransportStatus,
-  MessageHandler,
+  WritePacket,
 } from './interfaces';
 
 // Context
-export {
-  ExecutionContext,
+export {ExecutionContext} from './context';
+export type {
   ContextType,
+  ControllerClass,
+  EventContext,
+  HandlerFunction,
   HttpContext,
   RpcContext,
-  EventContext,
 } from './context';
 
 // Decorators
 export {
-  messageHandler,
+  EVENT_HANDLER_METADATA,
+  MESSAGE_HANDLER_METADATA,
   eventHandler,
+  messageHandler,
   payload,
   transportCtx,
+} from './decorators';
+export type {
+  EventHandlerMetadata,
   HandlerOptions,
   MessageHandlerMetadata,
-  EventHandlerMetadata,
-  MESSAGE_HANDLER_METADATA,
-  EVENT_HANDLER_METADATA,
 } from './decorators';
 
 // Utils
@@ -59,13 +97,19 @@ export {normalizePattern} from './utils';
 export {ClientProxy} from './client';
 
 // Server
-export {ServerBase, HandlerResult} from './server';
+export {ServerBase} from './server';
+export type {HandlerResult} from './server';
 
 // Serializers
 export {
-  Serializer,
-  Deserializer,
-  JsonSerializer,
+  CloudEventsDeserializer,
+  CloudEventsSerializer,
   JsonDeserializer,
+  JsonSerializer,
+} from './serializers';
+export type {
+  CloudEventsSerializerOptions,
+  Deserializer,
+  Serializer,
   TransportPacket,
 } from './serializers';

@@ -1,1 +1,1 @@
-export * from './handler-registry';
+export {HandlerRegistry} from './handler-registry';

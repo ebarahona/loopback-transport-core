@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest';
-import {normalizePattern} from '../utils';
+import {normalizePattern} from '../../utils';
 
 describe('normalizePattern', () => {
   it('passes strings through unchanged', () => {
@@ -12,9 +12,9 @@ describe('normalizePattern', () => {
   });
 
   it('deep sorts nested objects', () => {
-    expect(
-      normalizePattern({meta: {z: 1, a: 2}, cmd: 'get'}),
-    ).toBe('{"cmd":"get","meta":{"a":2,"z":1}}');
+    expect(normalizePattern({meta: {z: 1, a: 2}, cmd: 'get'})).toBe(
+      '{"cmd":"get","meta":{"a":2,"z":1}}',
+    );
   });
 
   it('handles arrays without sorting elements', () => {
