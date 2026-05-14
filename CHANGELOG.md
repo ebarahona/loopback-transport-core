@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.1.0](https://github.com/ebarahona/loopback-transport-core/compare/loopback-transport-core-v1.0.0...loopback-transport-core-v1.1.0) (2026-05-14)
+
+
+### Features
+
+* **discovery:** release v1.1.0 with three-axis extension model ([0c499a4](https://github.com/ebarahona/loopback-transport-core/commit/0c499a475eab4c8ac916a72826e52f8ece7104e2))
+* enterprise transport core stabilization ([6cf6446](https://github.com/ebarahona/loopback-transport-core/commit/6cf644670ac3081e3a547a923df0feda0c2f816b))
+* implement handler registry, booter, and component wiring ([da08d0a](https://github.com/ebarahona/loopback-transport-core/commit/da08d0a625c96824117f1bcdea28f315695ec711))
+* initial release of loopback-transport-core ([54e6f21](https://github.com/ebarahona/loopback-transport-core/commit/54e6f21653a768adeadf54bd751d9d9452beb5ec))
+
+
+### Bug Fixes
+
+* **ci:** unblock release-please and cross-platform CI for v1.1 ([f51823e](https://github.com/ebarahona/loopback-transport-core/commit/f51823e19f9d99e1e538d76b5583ee9a82b780c0))
+* enterprise-grade hardening of server base ([3b559c1](https://github.com/ebarahona/loopback-transport-core/commit/3b559c1f5452713ff4f6fa356b0d5e4eca8c3f9b))
+
+
+### Documentation
+
+* remove magic number from ServerBase example ([2b5010e](https://github.com/ebarahona/loopback-transport-core/commit/2b5010e7959de48912e32ea70d4941d1ce8ac9ba))
+
+## Changelog
+
 ## Changelog
 
 All notable changes from the first published release onward are documented here. Pre-release work happened on the `0.0.0` development branch and is not retroactively listed.
