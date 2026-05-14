@@ -28,7 +28,9 @@
     "nats",
     "event-driven",
     "message-handler",
-    "execution-context"
+    "execution-context",
+    "loopback4 extension",
+    "extension"
   ],
   "author": "Ed Barahona (https://github.com/ebarahona)",
   "license": "MIT",
