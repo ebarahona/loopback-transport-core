@@ -58,6 +58,7 @@ export class TransportComponent implements Component {
       .toClass(EventHandlerDiscoverer)
       .tag(TransportBindings.tags.HANDLER_DISCOVERER)
       .inScope(BindingScope.SINGLETON),
+    Binding.bind(TransportBindings.STRICT_BINDING).to(true),
   ];
 
   readonly lifeCycleObservers: Constructor<LifeCycleObserver>[] = [

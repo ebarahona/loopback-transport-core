@@ -461,6 +461,36 @@ export class HandlerAuditObserver implements LifeCycleObserver {
 
 </details>
 
+## Boot-time validation
+
+At application start, `HandlerRegistry.bindToServers` validates the
+registered handlers and transport servers against four common
+misconfigurations. The intent is to fail loud at boot rather than
+silently drop events at runtime.
+
+| Misconfiguration                                                  | Default behavior                                          | Configurable                                |
+| ----------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------- |
+| Handler references a transport name no `TransportServer` provides | Throws `TransportConfigError`                             | Yes, via `TransportBindings.STRICT_BINDING` |
+| Two `TransportServer` bindings share the same `NAME` tag          | Throws `TransportConfigError`                             | No                                          |
+| `TransportServer` is bound without a `NAME` tag                   | Debug log; server is skipped (no `listen()`, no handlers) | No                                          |
+| Handlers exist but no `TransportServer` bindings are registered   | Debug log                                                 | No                                          |
+
+The first guard is the loudest, because misnamed transports silently
+drop events at runtime if not caught at boot. The error lists every
+orphaned handler with its controller, method, pattern, and discoverer
+id, plus the set of known transport names so misspellings are easy to
+spot.
+
+To suppress the throw (for example to register handlers before their
+transport server is ready), set:
+
+```typescript
+app.bind(TransportBindings.STRICT_BINDING).to(false);
+```
+
+before calling `app.start()`. Orphaned handlers will then be logged
+via `debug` instead of throwing.
+
 ## Cross-cutting concerns
 
 Cross-cutting work (metrics, tracing, audit, authorization) goes through LoopBack 4's standard `@globalInterceptor` mechanism. Every transport handler runs through the same `invokeMethod` pipeline as HTTP controllers, so a single global interceptor instruments the whole application without per-decorator wiring or a separate wrapper extension point.

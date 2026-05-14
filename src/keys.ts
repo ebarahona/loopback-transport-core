@@ -162,6 +162,20 @@ export namespace TransportBindings {
   );
 
   /**
+   * Controls whether boot-time binding validation throws on misconfigurations
+   * (handler references unknown transport) or emits debug logs instead.
+   *
+   * Default: `true` (throw). Set to `false` via
+   * `app.bind(TransportBindings.STRICT_BINDING).to(false)` before `app.start()`
+   * if you need to register handlers ahead of their transport servers.
+   *
+   * @public
+   */
+  export const STRICT_BINDING = BindingKey.create<boolean>(
+    'transport.strict-binding',
+  );
+
+  /**
    * Binding key prefix for transport configurations.
    */
   export const CONFIG_PREFIX = 'transport.config';

@@ -197,16 +197,131 @@ export class HandlerRegistry {
 
     const serverBindings = app.findByTag(TRANSPORT_SERVER_TAG);
 
+    // Boot-time validation: surface misconfigurations loudly before any
+    // handler is bound to a server. Four guards run here:
+    //   1. Handlers referencing unknown transports.
+    //   2. Handlers exist but no transport servers registered.
+    //   3. Duplicate NAME tags across TransportServer bindings.
+    //   4. TransportServer binding without a NAME tag.
+    let strictBinding = true;
+    if (app.isBound(TransportBindings.STRICT_BINDING)) {
+      strictBinding = await app.get<boolean>(TransportBindings.STRICT_BINDING);
+    }
+
+    // Build the set of known transport names and detect duplicate NAME
+    // tags (Guard 3) and missing NAME tags (Guard 4) in a single pass.
+    const knownTransports = new Set<string>();
+    const nameToBindingKeys = new Map<string, string[]>();
     for (const serverBinding of serverBindings) {
       const tag = serverBinding.tagMap?.[TRANSPORT_NAME_TAG];
       if (typeof tag !== 'string' || tag.length === 0) {
-        throw new TransportConfigError(
-          `Transport server binding "${String(serverBinding.key)}" is ` +
-            `missing the "${TRANSPORT_NAME_TAG}" tag. Register the ` +
-            'server through registerServer/registerServerClass/' +
-            'registerServerProvider so the registry can route handlers ' +
-            'to the correct transport.',
+        debug(
+          '%s is registered as a TransportServer but has no NAME tag; the server is skipped during binding and will not receive handlers (the lifecycle observer also skips it during startup)',
+          String(serverBinding.key),
         );
+        continue;
+      }
+      knownTransports.add(tag);
+      const list = nameToBindingKeys.get(tag) ?? [];
+      list.push(String(serverBinding.key));
+      nameToBindingKeys.set(tag, list);
+    }
+
+    // Guard 3: duplicate NAME tags. Always throws regardless of strict mode.
+    for (const [name, keys] of nameToBindingKeys) {
+      if (keys.length > 1) {
+        throw new TransportConfigError(
+          `duplicate transport name "${name}": multiple TransportServer ` +
+            `bindings tagged with the same NAME (${keys.join(', ')}). ` +
+            'Each transport must have a unique name.',
+        );
+      }
+    }
+
+    // Guard 2: no transport servers but handlers exist. Always warns.
+    if (serverBindings.length === 0 && this.entries.size > 0) {
+      let handlerCount = 0;
+      for (const chain of this.entries.values()) handlerCount += chain.length;
+      debug(
+        'no transport servers registered but %d handlers are bound; handlers will not receive events',
+        handlerCount,
+      );
+    }
+
+    // Guard 1: handlers referencing unknown transports.
+    // Group orphaned entries by transport name for the error/log message.
+    const orphansByTransport = new Map<
+      string,
+      Array<{
+        controllerName: string;
+        methodName: string;
+        pattern: string;
+        discovererId: string;
+      }>
+    >();
+    for (const chain of this.entries.values()) {
+      for (const entry of chain) {
+        if (entry.transport === undefined || entry.transport === '*') continue;
+        if (knownTransports.has(entry.transport)) continue;
+        const list = orphansByTransport.get(entry.transport) ?? [];
+        list.push({
+          controllerName: entry.controllerClass.name,
+          methodName: entry.methodName,
+          pattern: normalizePattern(entry.pattern),
+          discovererId: entry.discovererId,
+        });
+        orphansByTransport.set(entry.transport, list);
+      }
+    }
+
+    if (orphansByTransport.size > 0) {
+      const knownList =
+        knownTransports.size === 0
+          ? '(none)'
+          : Array.from(knownTransports).join(', ');
+      const summaryParts: string[] = [];
+      for (const [name, list] of orphansByTransport) {
+        summaryParts.push(`${name} (${list.length} handlers)`);
+      }
+      const detailLines: string[] = [];
+      for (const [, list] of orphansByTransport) {
+        for (const o of list) {
+          detailLines.push(
+            `    - ${o.controllerName}.${o.methodName} on pattern "${o.pattern}" (discoverer "${o.discovererId}")`,
+          );
+        }
+      }
+      const message =
+        `handlers reference unknown transport(s): ${summaryParts.join(', ')}.\n` +
+        `  Known transports: ${knownList}\n` +
+        `  Orphaned handlers:\n${detailLines.join('\n')}`;
+
+      if (strictBinding) {
+        throw new TransportConfigError(message);
+      }
+      for (const [name, list] of orphansByTransport) {
+        const perTransportDetails = list
+          .map(
+            o =>
+              `    - ${o.controllerName}.${o.methodName} on pattern "${o.pattern}" (discoverer "${o.discovererId}")`,
+          )
+          .join('\n');
+        debug(
+          'handlers reference unknown transport "%s" (%d handlers).\n  Known transports: %s\n  Orphaned handlers:\n%s',
+          name,
+          list.length,
+          knownList,
+          perTransportDetails,
+        );
+      }
+    }
+
+    for (const serverBinding of serverBindings) {
+      const tag = serverBinding.tagMap?.[TRANSPORT_NAME_TAG];
+      if (typeof tag !== 'string' || tag.length === 0) {
+        // Guard 4 already emitted a debug warning above; only wildcard
+        // handlers can ever reach this server, so skip the routing loop.
+        continue;
       }
       const transportName: string = tag;
       const server = await app.get<TransportServer>(serverBinding.key);

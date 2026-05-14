@@ -11,7 +11,6 @@ import type {
   DiscoveredDeserializer,
   DiscoveredSerializer,
 } from './discovery/discovery.service';
-import {TransportConfigError} from './helpers/errors';
 import type {TransportServer} from './interfaces';
 import {
   DESERIALIZER_TAG,
@@ -319,8 +318,12 @@ export class TransportBooter implements LifeCycleObserver {
   /**
    * Resolve all registered transport servers with their names.
    *
-   * @throws TransportConfigError When a binding is tagged as a
-   *   transport server but missing the transport-name tag.
+   * Bindings tagged as transport servers but missing the transport-name
+   * tag are skipped with a debug log. The registry's Guard 4 in
+   * `bindToServers` also surfaces this misconfiguration. Skipped servers
+   * are not started and do not receive handlers; register them via
+   * `registerServer` / `registerServerClass` / `registerServerProvider`
+   * to opt in to the lifecycle.
    */
   private async getServerEntries(): Promise<
     Array<{name: string; server: TransportServer}>
@@ -330,12 +333,12 @@ export class TransportBooter implements LifeCycleObserver {
     for (const binding of bindings) {
       const tag = binding.tagMap?.[TRANSPORT_NAME_TAG];
       if (typeof tag !== 'string' || tag.length === 0) {
-        throw new TransportConfigError(
-          `Transport server binding "${String(binding.key)}" is missing ` +
-            `the "${TRANSPORT_NAME_TAG}" tag. Register the server through ` +
-            'registerServer/registerServerClass/registerServerProvider so ' +
-            'the booter can route handlers to the correct transport.',
+        debug(
+          'skipping transport server binding "%s": missing %s tag; will not be started or receive handlers',
+          String(binding.key),
+          TRANSPORT_NAME_TAG,
         );
+        continue;
       }
       const server = await this.app.get<TransportServer>(binding.key);
       entries.push({name: tag, server});
