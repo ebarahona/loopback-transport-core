@@ -9,6 +9,13 @@
 # CI runs lint/build/test on every PR regardless of local hooks, so
 # skipping the local install is safe -- just slower feedback.
 
+# Skip entirely on CI: no need to install git hooks in an ephemeral
+# runner, and lefthook's platform-specific subpackage may not be
+# resolved when the lockfile is missing cross-platform optional deps.
+if [ -n "$CI" ]; then
+  exit 0
+fi
+
 if npx lefthook install; then
   exit 0
 fi
