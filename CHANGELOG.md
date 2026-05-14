@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0](https://github.com/ebarahona/loopback-transport-core/compare/loopback-transport-core-v1.1.0...loopback-transport-core-v1.2.0) (2026-05-14)
+
+
+### Features
+
+* **registry:** add boot-time validation guards for misconfigured transports ([9d0738f](https://github.com/ebarahona/loopback-transport-core/commit/9d0738f26438aaeb750bbb461c42be08ba25489c))
+
+
+### Bug Fixes
+
+* **ci:** regen lockfile per-run and skip prepare on CI ([6da1bf0](https://github.com/ebarahona/loopback-transport-core/commit/6da1bf068460e4317e017df4f2c09f6391d47393))
+* **ci:** release-please workflow also needs lockfile-regen install ([daeb178](https://github.com/ebarahona/loopback-transport-core/commit/daeb1780013a307286a953ae8faf3f88c4fe4086))
+
 ## [1.1.0](https://github.com/ebarahona/loopback-transport-core/compare/loopback-transport-core-v1.0.0...loopback-transport-core-v1.1.0) (2026-05-14)
 
 ### Features
