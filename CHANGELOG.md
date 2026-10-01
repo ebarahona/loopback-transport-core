@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1](https://github.com/ebarahona/loopback-transport-core/compare/loopback-transport-core-v1.2.0...loopback-transport-core-v1.2.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **hooks:** drop the lefthook dependency so its postinstall can't write to a global hooksPath ([#5](https://github.com/ebarahona/loopback-transport-core/issues/5)) ([ad97e44](https://github.com/ebarahona/loopback-transport-core/commit/ad97e447e359f7c3b3e328bd6c60c26cb21a6b29))
+* **hooks:** never install into a hooksPath outside the repo ([#3](https://github.com/ebarahona/loopback-transport-core/issues/3)) ([6860fb3](https://github.com/ebarahona/loopback-transport-core/commit/6860fb321dcfd4c60a8bd09148217d754c38b600))
+
 ## [1.2.0](https://github.com/ebarahona/loopback-transport-core/compare/loopback-transport-core-v1.1.0...loopback-transport-core-v1.2.0) (2026-05-14)
 
 
